@@ -2,7 +2,7 @@ from filter.mistral_filter import filter_emails_with_mistral
 from crawler.navigator import crawl_for_emails
 
 # ... after scraping
-site = "https://longnguyen.tech"
+site = "https://www.taniarascia.com/"
 raw_emails = crawl_for_emails(site)
 
 print(f"\n📧 Raw emails found: {[e['value'] for e in raw_emails]}")

@@ -1,1 +1,24 @@
-pytest
+# Web scraping
+requests==2.31.0
+beautifulsoup4==4.12.3
+selenium==4.20.0
+
+# Async navigation (if needed)
+httpx==0.27.0
+
+# Parsing & URL utilities
+tldextract==5.1.2
+
+# Email extraction (optional for regex boost)
+email-validator==2.1.0.post1
+
+# CSV & date handling (built-in, but list anyway for clarity)
+python-dateutil==2.8.2
+
+# AI connection (for Mistral via Ollama)
+openai==1.23.6  # Only if you use OpenAI fallback (optional)
+ollama  # Local call to Mistral (assumes installed natively)
+
+# Dev & Testing
+pytest==8.1.1
+pytest-mock==3.14.0
