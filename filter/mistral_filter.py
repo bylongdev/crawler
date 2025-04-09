@@ -23,29 +23,25 @@ Official website: {site}
 Below is a list of email addresses scraped directly from pages on this site:
 {chr(10).join(emails)}
 
-Your task is to choose the most likely contact email from this list.
-
-
+Your task is to choose the single best email for a customer or client to reach this business regarding general inquiries, services, or sales.
 
 Rules:
 - ONLY choose from the emails in the list above. DO NOT make up or guess.
 - Reply with just one email address only — no punctuation, no quotes, no commentary.
 - Prefer emails that match the website domain.
-- Prefer emails that are friendly and personal, like hello@ or contact@.
-- Avoid generic or automated emails (like noreply@, info@, etc.).
+- Prefer customer-facing emails like contact@, hello@, support@, sales@, or similar.
+- Avoid emails meant for internal teams (e.g., employment@, media@, noreply@, admin@, info@).
 - Avoid emails that look like placeholders or are malformed.
-- Do not include duplicates or any email with subject/query parameters.
 - Only return a real, valid email from the list.
-- If there is no valid business contact email, return an empty string (nothing).
 
-Strictly follow these rules and do not deviate from them.
+Return output in this exact format:
+- First line: the single best contact email (for customers/sales)
+- Then, on the next lines: a list of all scored emails like this:
+email@example.com: 0.87
 
-Return only the email address on a single line with no explanation or further text.
-
-Additionally, include a score (between 0.0 and 1.0) for each email in this format:
-email@example.com: 0.85
-The scores should reflect how suitable each email is as a business contact.
+Strictly follow the format above. Do not add any explanations or extra text.
 """.strip()
+
 
 
 def filter_emails_with_mistral(raw_emails: list[dict]) -> list[str]:
