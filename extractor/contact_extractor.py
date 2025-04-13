@@ -4,6 +4,10 @@ from bs4 import BeautifulSoup
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
 MAX_EMAIL_RESULTS = 10
 
+def clean_email(e: str) -> str:
+    return e.split("?")[0].strip().lower()
+
+
 def extract_contacts_from_html(html: str, source_url: str = "") -> list[dict]:
     if not html:
         return []
@@ -16,7 +20,7 @@ def extract_contacts_from_html(html: str, source_url: str = "") -> list[dict]:
 
     # ✨ 1. Search in plain text
     for match in EMAIL_REGEX.findall(text):
-        clean = match.lower()
+        clean = clean_email(match)
         if clean not in seen_emails:
             seen_emails.add(clean)
             found_contacts.append({
@@ -32,7 +36,7 @@ def extract_contacts_from_html(html: str, source_url: str = "") -> list[dict]:
     for tag in soup.find_all("a", href=True):
         href = tag["href"]
         if href.lower().startswith("mailto:"):
-            email = href.split("mailto:")[1].split("?")[0].strip().lower()
+            email = clean_email(href.split("mailto:")[1])
             if email and email not in seen_emails:
                 seen_emails.add(email)
                 found_contacts.append({
