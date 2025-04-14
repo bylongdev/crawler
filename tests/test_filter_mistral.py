@@ -3,15 +3,18 @@ import pytest
 from utils.save import save_compact_recommendation_csv
 import csv
 import os
-from filter import mistral_filter
+from filter.mistral_filter import MistralEmailFilter
 
 def test_filter_email_with_fallback(monkeypatch):
     fake_emails = [{"value": "noreply@example.com", "source": "https://example.com"}]
 
-    # Patch `ask_mistral` to return nothing so it triggers the fallback
-    monkeypatch.setattr(mistral_filter, "ask_mistral", lambda _: "")
+    Mistral = MistralEmailFilter()
 
-    result = mistral_filter.filter_emails_with_mistral(fake_emails)
+
+    # Patch `ask_mistral` to return nothing so it triggers the fallback
+    monkeypatch.setattr(Mistral, "ask_mistral", lambda _: "")
+
+    result = Mistral.filter(fake_emails)
     assert result == [] or result[0] == "noreply@example.com"  # fallback behaviour
 
 

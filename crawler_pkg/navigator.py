@@ -1,121 +1,97 @@
-# crawler/navigator.py
-from urllib.parse import urljoin, urlparse
-from scraper.fetcher import fetch_html
-from extractor.contact_extractor import extract_contacts_from_html
+from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urlunparse, parse_qs
+from scraper.fetcher import HTMLFetcher
 
-# Keywords that often lead to contact info
 KEYWORDS = ["contact", "about", "support", "team", "help", "impressum"]
+MAX_PAGES = 10
 
-MAX_PAGES = 10  # Limit how deep we go
+class EmailCrawler:
+    def __init__(self, fetcher: HTMLFetcher = None):
+        self.fetcher = fetcher or HTMLFetcher()
+        self.visited = set()
+        self.queue = []
+        self.all_contacts = []
 
-def is_internal_link(link: str, base_domain: str) -> bool:
-    parsed = urlparse(link)
-    return parsed.netloc == "" or parsed.netloc == base_domain
+    def crawl(self, start_url: str) -> list[dict]:
+        self.queue = [start_url]
+        self.visited.clear()
+        self.all_contacts.clear()
 
-def is_social_media_link(link: str ) -> bool:
-    social_media_domains = [
-        "facebook.com"
-        # , "twitter.com", "linkedin.com",
-        # "instagram.com", "youtube.com", "pinterest.com",
-        # "tiktok.com", "snapchat.com", "reddit.com"
-    ]
-    return any(domain in link for domain in social_media_domains)
+        base_domain = urlparse(start_url).netloc
 
-def parse_link_to_about(link: str) -> str | None:
-    parsed = urlparse(link)
+        while self.queue and len(self.visited) < MAX_PAGES:
+            url = self.queue.pop(0)
+            if url in self.visited:
+                continue
 
-    if parsed.netloc == "":
-        return None
+            print(f"🔎 Visiting: {url}")
+            self.visited.add(url)
 
-    # Normalise the domain
-    netloc = parsed.netloc.lower()
-    if "facebook" not in netloc:
-        return None
+            try:
+                html, mode, contacts = self.fetcher.fetch(url)
+                print(f"Using mode: {mode}")
+                self.all_contacts.extend(contacts)
 
-    netloc = netloc.replace("m.facebook", "www.facebook").replace("fb.com", "www.facebook.com")
-    path_parts = parsed.path.strip("/").split("/")
+                if "facebook.com" in urlparse(url).netloc and contacts:
+                    print(f"✨ Found emails on Facebook page: {contacts}")
+                    return contacts
 
-    # Reject if it's generic or weird
-    if not path_parts or path_parts[0] in ["", "about", "privacy", "support", "policies", "business", "careers"]:
-        return None
+                if "facebook.com" in urlparse(url).netloc:
+                    continue  # Don't crawl deeper into Facebook
 
-    # Handle profile.php?id=... pattern
-    if path_parts[0] == "profile.php":
-        query = parse_qs(parsed.query)
-        user_id = query.get("id", [""])[0]
-        if user_id:
-            return f"https://{netloc}/profile.php?id={user_id}&sk=about"
-        return None
+                soup = BeautifulSoup(html, "html.parser")
+                for a in soup.find_all("a", href=True):
+                    href = a["href"]
+                    text = a.get_text()
+                    full_url = urljoin(url, href)
 
-    # Assume it's a username/page name
-    username = path_parts[0]
-    return f"https://{netloc}/{username}/about"
+                    if full_url in self.visited:
+                        continue
 
+                    if (
+                        self._is_internal_link(full_url, base_domain)
+                        and self._is_useful_link(href + text)
+                    ):
+                        self.queue.append(full_url)
 
-def is_useful_link(link_text: str) -> bool:
-    return any(keyword in link_text.lower() for keyword in KEYWORDS)
+                    if self._is_social_media_link(full_url):
+                        about_url = self._parse_link_to_about(full_url)
+                        if about_url and about_url not in self.visited:
+                            print(f"🌟 Prioritising Facebook About page: {about_url}")
+                            self.queue.insert(0, about_url)
 
-def crawl_for_emails(start_url: str) -> list[dict]:
-    visited = set()
-    queue = [start_url]
-    all_contacts = []
+            except Exception as e:
+                print(f"❌ Failed to process {url}: {e}")
 
-    base_domain = urlparse(start_url).netloc
+        return self.all_contacts
 
-    while queue and len(visited) < MAX_PAGES:
-        url = queue.pop(0)
-        if url in visited:
-            continue
+    def _is_internal_link(self, link: str, base_domain: str) -> bool:
+        parsed = urlparse(link)
+        return parsed.netloc == "" or parsed.netloc == base_domain
 
-        print(f"🔎 Visiting: {url}")
-        visited.add(url)
+    def _is_social_media_link(self, link: str) -> bool:
+        return "facebook.com" in link
 
-        try:
-            html, mode, contacts = fetch_html(url)
+    def _parse_link_to_about(self, link: str) -> str | None:
+        parsed = urlparse(link)
+        if parsed.netloc == "":
+            return None
 
-            print(f"Using mode: {mode}")
-            all_contacts.extend(contacts)
+        netloc = parsed.netloc.lower().replace("m.facebook", "www.facebook").replace("fb.com", "www.facebook.com")
+        path_parts = parsed.path.strip("/").split("/")
 
-            if "facebook.com" in urlparse(url).netloc and len(contacts) > 0:
-                print(f"✨ Found emails on Facebook page: {contacts}")
-                return contacts
+        if not path_parts or path_parts[0] in ["", "about", "privacy", "support", "policies", "business", "careers"]:
+            return None
 
-            # 💣 Stop crawling links if we're already inside Facebook
-            if "facebook.com" in urlparse(url).netloc:
-                continue  # do not parse any more links from inside Facebook!
+        if path_parts[0] == "profile.php":
+            query = parse_qs(parsed.query)
+            user_id = query.get("id", [""])[0]
+            if user_id:
+                return f"https://{netloc}/profile.php?id={user_id}&sk=about"
+            return None
 
-            soup = BeautifulSoup(html, "html.parser")
-            
-            # Extract all links on the page
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                text = a.get_text()
-                full_url = urljoin(url, href)
+        username = path_parts[0]
+        return f"https://{netloc}/{username}/about"
 
-                if full_url in visited:
-                    continue
-
-                if (
-                    is_internal_link(full_url, base_domain)
-                    and is_useful_link(href + text)
-                    and full_url not in visited
-                ):
-                    queue.append(full_url)
-
-
-
-                # 💙 Prioritise Facebook About links
-                if is_social_media_link(full_url):
-                    about_url = parse_link_to_about(full_url)
-                    if about_url and about_url not in visited:
-                        print(f"🌟 Prioritising Facebook About page: {about_url}")
-                        queue.insert(0, about_url)
-                    continue
-
-
-        except Exception as e:
-            print(f"❌ Failed to process {url}: {e}")
-
-    return all_contacts
+    def _is_useful_link(self, link_text: str) -> bool:
+        return any(keyword in link_text.lower() for keyword in KEYWORDS)

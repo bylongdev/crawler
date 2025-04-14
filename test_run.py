@@ -1,5 +1,5 @@
-from filter.mistral_filter import filter_emails_with_mistral
-from crawler_pkg.navigator import crawl_for_emails
+from filter.mistral_filter import MistralEmailFilter
+from crawler_pkg.navigator import EmailCrawler
 import sys
 import io
 
@@ -9,14 +9,16 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # site = "https://longnguyen.tech/"
 # site = "https://www.duralpsychology.com.au/"
 site = "https://possumranger.com.au/"
-raw_emails = crawl_for_emails(site)
+crawler = EmailCrawler()
+raw_emails = crawler.crawl(site)
+Mistral = MistralEmailFilter()
 
 print(f"\n📧 Raw emails found: {[e['value'] for e in raw_emails]}")
 
 if not raw_emails:
     print("😢 No emails found to evaluate. Skipping Mistral...")
 else:
-    filtered = filter_emails_with_mistral(raw_emails)
+    filtered = Mistral.filter(raw_emails)
 
     print(f"\n🎯 Mistral-approved emails:")
     for email in filtered:
