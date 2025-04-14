@@ -29,10 +29,7 @@ def fetch_html(url: str, cookie_path: str = "./scraper/cookies.json") -> tuple[s
             print(f"✨ Emails found in dynamic HTML! Using dynamic mode. {contacts}")
             return html, "dynamic", contacts
         else:
-            debug_path = f"debug_{urlparse(url).netloc.replace('.', '_')}.html"
-            with open(debug_path, "w", encoding="utf-8") as f:
-                f.write(html)
-            print(f"🧪 Saved debug HTML to: {debug_path}")
+            print("⚠️ No emails found in dynamic HTML.")
             return html, "dynamic", []
         
     except Exception as e:

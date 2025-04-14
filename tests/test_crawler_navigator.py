@@ -1,6 +1,6 @@
 # tests/test_crawler_navigator.py
 
-from crawler.navigator import crawl_for_emails
+from crawler_pkg.navigator import crawl_for_emails
 
 def test_crawl_finds_emails_on_example_com():
     # Example.com doesn't have real emails, but the function should run without error

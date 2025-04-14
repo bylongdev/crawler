@@ -16,9 +16,23 @@ def fetch_dynamic_html(url: str, wait_selector: str = "body", timeout: int = 10,
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-extensions")
     options.add_argument("--enable-unsafe-swiftshader")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(
+    "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    )
+    # Disables Selenium's automation flags
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+
     options.add_argument("--log-level=3")
 
     driver = webdriver.Chrome(options=options)
+    driver.execute_cdp_cmd("Network.setUserAgentOverride", {
+    "userAgent": "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    })
+    
+
     try:
         driver.get(url)
 
