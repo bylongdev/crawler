@@ -56,9 +56,10 @@ class EmailCrawler:
 
                     if self._is_social_media_link(full_url):
                         about_url = self._parse_link_to_about(full_url)
-                        if about_url and about_url not in self.visited:
+                        if about_url and about_url not in self.visited and about_url not in self.queue:
                             print(f"🌟 Prioritising Facebook About page: {about_url}")
                             self.queue.insert(0, about_url)
+
 
             except Exception as e:
                 print(f"❌ Failed to process {url}: {e}")
