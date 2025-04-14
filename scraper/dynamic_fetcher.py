@@ -1,40 +1,38 @@
-# Fetch with Selenium (for dynamic pages)
+# dynamic_fetcher.py
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from urllib.parse import urlparse
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-
+from urllib.parse import urlparse
 import time
 
-def fetch_dynamic_html(url: str, wait_selector: str = "body", timeout: int = 10, cookies: dict = None) -> str:
-    options = Options()
-    # options.add_argument("--headless=new")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--enable-unsafe-swiftshader")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument(
-    "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    )
-    # Disables Selenium's automation flags
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
+class PersistentBrowser:
+    def __init__(self, wait_selector: str = "body", timeout: int = 10, headless: bool = False):
+        self.wait_selector = wait_selector
+        self.timeout = timeout
 
-    options.add_argument("--log-level=3")
+        options = Options()
+        if headless:
+            options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--enable-unsafe-swiftshader")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument(
+            "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
+        options.add_argument("--log-level=3")
 
-    driver = webdriver.Chrome(options=options)
-    driver.execute_cdp_cmd("Network.setUserAgentOverride", {
-    "userAgent": "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    })
-    
+        self.driver = webdriver.Chrome(options=options)
 
-    try:
-        driver.get(url)
+    def fetch(self, url: str, cookies: dict = None) -> str:
+        driver = self.driver
 
         if cookies:
             parsed = urlparse(url)
@@ -42,21 +40,19 @@ def fetch_dynamic_html(url: str, wait_selector: str = "body", timeout: int = 10,
             driver.get(base_url)
             for name, value in cookies.items():
                 driver.add_cookie({"name": name, "value": value})
-            driver.get(url)
+        driver.get(url)
 
-        # ✨ Wait until page is fully loaded AND body has content
-        WebDriverWait(driver, timeout).until(
+        WebDriverWait(driver, self.timeout).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
-        WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector))
+        WebDriverWait(driver, self.timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, self.wait_selector))
         )
 
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
-        time.sleep(3)  # ← this lets footer content render properly!
-
+        time.sleep(3)
 
         return driver.page_source
-    finally:
-        driver.quit()
+
+    def close(self):
+        self.driver.quit()

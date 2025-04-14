@@ -1,21 +1,27 @@
 import json
 from urllib.parse import urlparse
 from .static_fetcher import fetch_static_html
-from .dynamic_fetcher import fetch_dynamic_html
+from .dynamic_fetcher import PersistentBrowser
 from extractor.contact_extractor import EmailsExtractor
 
 
 class HTMLFetcher:
     def __init__(self, cookie_path: str = "./scraper/cookies.json"):
         self.cookies = self.load_cookies_from_json(cookie_path)
+        self.browser = PersistentBrowser()  # Keep browser alive for this instance
+        self.extractor = EmailsExtractor()
 
     def load_cookies_from_json(self, path: str) -> dict:
         """
         Loads cookies from a JSON file and returns a name:value cookie dictionary.
         """
-        with open(path, "r", encoding="utf-8") as file:
-            raw = json.load(file)
-            return {cookie["name"]: cookie["value"] for cookie in raw}
+        try:
+            with open(path, "r", encoding="utf-8") as file:
+                raw = json.load(file)
+                return {cookie["name"]: cookie["value"] for cookie in raw}
+        except FileNotFoundError:
+            print(f"⚠️ Cookie file not found at: {path}")
+            return {}
 
     def fetch(self, url: str) -> tuple[str, str, list[dict]]:
         """
@@ -26,11 +32,10 @@ class HTMLFetcher:
             - mode (str): "static", "dynamic", or "error"
             - contacts (list[dict]): List of extracted email contacts
         """
-        # Initialize the contact extractor
-        extractor = EmailsExtractor()
         try:
+            # 🍃 Try static first
             html = fetch_static_html(url, cookies=self.cookies)
-            contacts = extractor.extract_emails(html, url)
+            contacts = self.extractor.extract_emails(html, url)
 
             if contacts:
                 print(f"✨ Emails found in static HTML! Using static mode.")
@@ -38,8 +43,9 @@ class HTMLFetcher:
 
             print("⚠️ No emails in static HTML. Falling back to dynamic fetch...")
 
-            html = fetch_dynamic_html(url, cookies=self.cookies)
-            contacts = extractor.extract_emails(html, url)
+            # ⚡ Then try dynamic with persistent browser
+            html = self.browser.fetch(url, cookies=self.cookies)
+            contacts = self.extractor.extract_emails(html, url)
 
             if contacts:
                 print(f"✨ Emails found in dynamic HTML! Using dynamic mode. {contacts}")
@@ -49,5 +55,9 @@ class HTMLFetcher:
             return html, "dynamic", []
 
         except Exception as e:
-            print(f"⚠️ Error fetching {url}: {e}")
+            print(f"❌ Error while fetching {url}: {e}")
             return "", "error", []
+
+    def close(self):
+        """Shuts down the persistent browser when finished."""
+        self.browser.close()

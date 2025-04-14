@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch
 from scraper.fetcher import HTMLFetcher
 
@@ -16,7 +15,7 @@ def test_fetcher_fallback_to_dynamic():
     fetcher = HTMLFetcher()
     with patch("scraper.fetcher.fetch_static_html", return_value="<html>empty</html>"), \
          patch("extractor.contact_extractor.EmailsExtractor.extract_emails", side_effect=[[], [{"value": "b@site.com"}]]), \
-         patch("scraper.fetcher.fetch_dynamic_html", return_value="<html>dynamic</html>"):
+         patch("scraper.fetcher.PersistentBrowser.fetch", return_value="<html>dynamic</html>"):
         html, mode, contacts = fetcher.fetch("http://test.com")
         assert mode == "dynamic"
         assert contacts[0]["value"] == "b@site.com"

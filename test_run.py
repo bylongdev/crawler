@@ -2,8 +2,11 @@ from filter.mistral_filter import MistralEmailFilter
 from crawler_pkg.navigator import EmailCrawler
 import sys
 import io
+import time
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+start_time = time.time()
 
 # ... after scraping
 # site = "https://longnguyen.tech/"
@@ -25,3 +28,6 @@ else:
         print(f" → {email}")
 
 
+end_time = time.time()
+execution_time = end_time - start_time  
+print(f"\nExecution time: {execution_time:.2f} seconds")
