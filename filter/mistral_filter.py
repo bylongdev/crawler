@@ -3,12 +3,12 @@
 import subprocess
 from urllib.parse import urlparse
 from utils.save import save_compact_recommendation_csv
+import re
 
 class MistralEmailFilter:
     """
     Uses the local Mistral LLM model via Ollama to intelligently score and recommend the best email address from a list.
     """
-
     @staticmethod
     def ask_mistral(prompt: str) -> str:
         """Send a structured prompt to Mistral and retrieve the response."""
@@ -30,41 +30,54 @@ class MistralEmailFilter:
     def build_prompt(site: str, emails: list[str]) -> str:
         """Build the exact scoring prompt for Mistral."""
         return f"""
-You are a website contact email validator.
+            You are a website contact email validator.
 
-Official website: {site}
+            Official website: {site}
 
-Below is a list of email addresses scraped directly from pages on this site:
-{chr(10).join(emails)}
+            Below is a list of email addresses scraped directly from pages on this site:
+            {chr(10).join(emails)}
 
-Your task is to choose the single best email for a customer or client to reach this business regarding general inquiries, services, or sales.
+            Your task is to choose the single best email for a customer or client to reach this business regarding general inquiries, services, or sales.
 
-Rules:
-- ONLY choose from the emails in the list above. DO NOT make up or guess.
-- Reply with just one email address only — no punctuation, no quotes, no commentary.
-- Do not include duplicates or any email with subject/query parameters.
-- Only return a real, valid email from the list.
+            Rules:
+            - ONLY choose from the emails in the list above. DO NOT make up or guess.
+            - Reply with just one email address only — no punctuation, no quotes, no commentary.
+            - Do not include duplicates or any email with subject/query parameters.
+            - Only return a real, valid email from the list.
 
-Strictly follow these rules and do not deviate from them.
+            Strictly follow these rules and do not deviate from them.
 
-DO NOT create or suggest any new email addresses.
+            DO NOT create or suggest any new email addresses.
 
-Score each email from 0.0 to 1.0 based on how likely it is to be the best contact email for this business.
-- from 0.0 to 1.0, where 1.0 is the best email.
-- 0.0 means the email is not valid or not a business contact email.
-- 1.0 means the email is the best business contact email.
-- Prefer emails that match the website domain.
-- Prefer customer-facing emails like contact@, hello@, support@, sales@, or similar.
-- Avoid emails meant for internal teams (e.g., employment@, media@, noreply@, admin@, info@).
-- Avoid emails that look like placeholders or are malformed.
+            Score each email from 0.0 to 1.0 based on how likely it is to be the best contact email for this business.
+            - from 0.0 to 1.0, where 1.0 is the best email.
+            - 0.0 means the email is not valid or not a business contact email.
+            - 1.0 means the email is the best business contact email.
+            - Prefer emails that match the website domain.
+            - Prefer customer-facing emails like contact@, hello@, support@, sales@, or similar.
+            - Avoid emails meant for internal teams (e.g., employment@, media@, noreply@, admin@, info@).
+            - Avoid emails that look like placeholders or are malformed.
 
-Strictly follow this format. DO NOT add any explanations or extra text.
+            Strictly follow this format. DO NOT add any explanations or extra text.
 
-Return output in **this exact format**:
-- A list of all scored emails like this: email@example.com: 0.87
+            Return output in **this exact format**:
+            - A list of all scored emails like this: email@example.com: 0.87
 
-If there is no valid business contact email, return an empty string (nothing).
-""".strip()
+            If there is no valid business contact email, return an empty string (nothing).
+            """.strip()
+    
+    @staticmethod
+    def clean_email(e: str) -> str | None:
+        e = e.strip().lower()
+        if not e or "@" not in e:
+            return None
+        if any(bad in e for bad in ["noreply", "no-reply", "do-not-reply", ".jpg", ".png", ".gif", "utm_", "+"]):
+            return None
+        if not re.match(r"^[^@]+@[^@]+\.[^@]+$", e):
+            return None
+        return e
+
+    
 
     def filter(self, raw_emails: list[dict]) -> list[str]:
         """
@@ -73,7 +86,14 @@ If there is no valid business contact email, return an empty string (nothing).
         if not raw_emails:
             return []
 
-        email_list = [email['value'].strip().lower() for email in raw_emails]
+        seen = set()
+        email_list = []
+
+        for email in raw_emails:
+            cleaned = self.clean_email(email['value'])
+            if cleaned and cleaned not in seen:
+                seen.add(cleaned)
+                email_list.append(cleaned)
 
         if len(email_list) == 1:
             print("⚠️ Only one email found. Using that one.")
