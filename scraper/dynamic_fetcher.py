@@ -54,5 +54,23 @@ class PersistentBrowser:
 
         return driver.page_source
 
+    def setup_driver(self, url: str, cookies: dict = None) -> webdriver.Chrome:
+        if cookies:
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            self.driver.get(base_url)
+            for name, value in cookies.items():
+                self.driver.add_cookie({"name": name, "value": value})
+        self.driver.get(url)
+
+        WebDriverWait(self.driver, self.timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+
+        WebDriverWait(self.driver, self.timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, self.wait_selector))
+        )
+        return self.driver
+
     def close(self):
         self.driver.quit()

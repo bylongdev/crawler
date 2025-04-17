@@ -138,4 +138,4 @@ class MistralEmailFilter:
             email_scores=scored
         )
 
-        return [recommended] if recommended else []
+        return recommended

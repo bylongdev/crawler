@@ -15,17 +15,18 @@ site = "https://possumranger.com.au/"
 crawler = EmailCrawler()
 raw_emails = crawler.crawl(site)
 Mistral = MistralEmailFilter()
+filtered_email = ""
 
 print(f"\n📧 Raw emails found: {[e['value'] for e in raw_emails]}")
 
 if not raw_emails:
     print("😢 No emails found to evaluate. Skipping Mistral...")
 else:
-    filtered = Mistral.filter(raw_emails)
+    filtered_email = Mistral.filter(raw_emails)
 
     print(f"\n🎯 Mistral-approved emails:")
-    for email in filtered:
-        print(f" → {email}")
+    # for email in filtered:
+    print(f" → {filtered_email}")
 
 
 end_time = time.time()
