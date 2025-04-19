@@ -17,6 +17,7 @@ class PersistentBrowser:
         if headless:
             options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-extensions")
@@ -34,20 +35,7 @@ class PersistentBrowser:
     def fetch(self, url: str, cookies: dict = None) -> str:
         driver = self.driver
 
-        if cookies:
-            parsed = urlparse(url)
-            base_url = f"{parsed.scheme}://{parsed.netloc}"
-            driver.get(base_url)
-            for name, value in cookies.items():
-                driver.add_cookie({"name": name, "value": value})
-        driver.get(url)
-
-        WebDriverWait(driver, self.timeout).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        WebDriverWait(driver, self.timeout).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, self.wait_selector))
-        )
+        self._prepare_page(url, cookies)
 
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(3)
@@ -55,22 +43,31 @@ class PersistentBrowser:
         return driver.page_source
 
     def setup_driver(self, url: str, cookies: dict = None) -> webdriver.Chrome:
+        driver = self.driver
+        self._prepare_page(url, cookies)
+        return self.driver
+
+    def _prepare_page(self, url: str, cookies: dict = None):
         if cookies:
-            parsed = urlparse(url)
-            base_url = f"{parsed.scheme}://{parsed.netloc}"
-            self.driver.get(base_url)
+            self.driver.get(url)
             for name, value in cookies.items():
                 self.driver.add_cookie({"name": name, "value": value})
-        self.driver.get(url)
 
+        self.driver.get(url)
+        self.wait_for_ready()
+        
+
+    def wait_for_ready(self):
         WebDriverWait(self.driver, self.timeout).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
-
         WebDriverWait(self.driver, self.timeout).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, self.wait_selector))
         )
-        return self.driver
+        
+
 
     def close(self):
         self.driver.quit()
+
+

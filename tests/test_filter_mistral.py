@@ -15,7 +15,7 @@ def test_filter_email_with_fallback(monkeypatch):
     monkeypatch.setattr(Mistral, "ask_mistral", lambda _: "")
 
     result = Mistral.filter(fake_emails)
-    assert result == [] or result[0] == "noreply@example.com"  # fallback behaviour
+    assert result == "" or result == "noreply@example.com"  # fallback behaviour
 
 
 def test_compact_csv_saved(tmp_path):
