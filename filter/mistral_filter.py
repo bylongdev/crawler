@@ -2,7 +2,6 @@
 
 import subprocess
 from urllib.parse import urlparse
-from utils.save import save_compact_recommendation_csv
 import re
 
 class MistralEmailFilter:
@@ -131,11 +130,5 @@ class MistralEmailFilter:
                     break
             if not recommended and len(email_list) == 1:
                 recommended = email_list[0]
-
-        save_compact_recommendation_csv(
-            site=domain,
-            recommended=recommended,
-            email_scores=scored
-        )
 
         return recommended

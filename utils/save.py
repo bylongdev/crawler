@@ -1,48 +1,48 @@
-import csv
 from pathlib import Path
+from datetime import datetime
+import csv
 
+class BusinessContactSnapshot:
+    def __init__(
+        self,
+        email: str,
+        phone: str,
+        address: str,
+        embed_map_link: str,
+        hours: str = "",
+        filename: str = "business_contacts.csv"
+    ):
+        self.email = email
+        self.phone = phone
+        self.address = address
+        self.embed_map_link = embed_map_link
+        self.hours = hours
+        self.filepath = Path(filename)
+        self._ensure_file_exists()
 
-def save_compact_recommendation_csv(
-    site: str,
-    recommended: str,
-    email_scores: list[tuple[str, float]],
-    filename: str = "compact_recommendations.csv"
-) -> str:
-    """
-    Saves a compact CSV with one row per site including recommended email and list of scored emails (no scores shown).
-    """
+    def _ensure_file_exists(self):
+        if not self.filepath.exists():
+            with open(self.filepath, mode="w", newline='', encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "site", "email", "phone", "address", "embed_map_link", "hours", "timestamp"
+                ])
 
-    filepath = Path(filename)
-    rows = {}
+    def save(self, site: str, timestamp: str = None) -> str:
+        if not timestamp:
+            timestamp = datetime.now().isoformat(timespec='seconds')
 
-    # Load previous data
-    if filepath.exists():
-        with open(filepath, newline='', encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                rows[row["site"]] = {
-                    "recommended": row["recommended"],
-                    "scored": row["scored"]
-                }
+        with open(self.filepath, mode="a", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                site,
+                self.email,
+                self.phone,
+                self.address,
+                self.embed_map_link,
+                self.hours,
+                timestamp
+            ])
 
-    # Format email list (just emails, no scores)
-    email_list_str = "; ".join(
-        email.strip().lower()
-        for email, _ in sorted(email_scores, key=lambda x: -x[1])
-    )
-
-    # Update row
-    rows[site] = {
-        "recommended": recommended,
-        "scored": email_list_str
-    }
-
-    # Save updated
-    with open(filepath, mode="w", newline='', encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["site", "recommended", "scored"])
-        for site, data in rows.items():
-            writer.writerow([site, data["recommended"], data["scored"]])
-
-    print(f"📦 Saved compact CSV (emails only) to: {filepath}")
-    return str(filepath)
+        print(f"💾 Saved business contact for {site} at {timestamp}")
+        return str(self.filepath)

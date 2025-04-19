@@ -1,34 +1,54 @@
-from filter.mistral_filter import MistralEmailFilter
-from crawler_pkg.navigator import EmailCrawler
 import sys
 import io
 import time
+
+from scraper.gmaps_scraper import GoogleMapsScraper
+from scraper.web_scraper import EmailProcessor
+from utils.save import BusinessContactSnapshot  # 📦 Your contact-saving class
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 start_time = time.time()
 
-# ... after scraping
-# site = "https://longnguyen.tech/"
+# 💻 Site to scrape
 # site = "https://www.duralpsychology.com.au/"
-site = "https://possumranger.com.au/"
-crawler = EmailCrawler()
-raw_emails = crawler.crawl(site)
-Mistral = MistralEmailFilter()
-filtered_email = ""
+site = "https://www.businesslocal.com.au/"  # Example site
 
-print(f"\n📧 Raw emails found: {[e['value'] for e in raw_emails]}")
+# ✉️ Step 1: Email filtering
+email_scraper = EmailProcessor(site)
+filtered_email = email_scraper.process_emails()
 
-if not raw_emails:
-    print("😢 No emails found to evaluate. Skipping Mistral...")
-else:
-    filtered_email = Mistral.filter(raw_emails)
+# 📍 Step 2: Scrape GMaps info
+gmaps_scraper = GoogleMapsScraper()
+gmaps_result = gmaps_scraper.search_business(site)  # pass site if needed for validation
 
-    print(f"\n🎯 Mistral-approved emails:")
-    # for email in filtered:
-    print(f" → {filtered_email}")
+# ✅ Step 3: Unpack results from GMaps
+phone = gmaps_result.get("phone_number", "")
+address = gmaps_result.get("address", "")
+embed = gmaps_result.get("embed_map_link", "")
+hours = gmaps_result.get("opening_hours", "")
 
+if gmaps_result is None:
+    print("❌ Failed to scrape Google Maps data.")
+    sys.exit(1)
+
+# 💾 Step 4: Save to CSV snapshot
+snapshot = BusinessContactSnapshot(
+    email=filtered_email or "",
+    phone=phone,
+    address=address,
+    embed_map_link=embed,
+    hours=hours
+)
+snapshot.save(site)
+
+# 🖨️ Final print
+print(f"\n📧 Email: {filtered_email}")
+print(f"📞 Phone: {phone}")
+print(f"🏠 Address: {address}")
+print(f"🗺️ Embed Map: {embed}")
+print(f"\n⏰ Opening Hours:\n{hours}")
 
 end_time = time.time()
-execution_time = end_time - start_time  
-print(f"\nExecution time: {execution_time:.2f} seconds")
+print(f"\n⏱️ Execution time: {end_time - start_time:.2f} seconds")
+print("✅ Process completed successfully.")

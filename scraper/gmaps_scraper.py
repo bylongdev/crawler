@@ -29,10 +29,19 @@ class GoogleMapsScraper(PersistentBrowser):
             phone_number = self._get_phone_number()
             address = self._get_address()
             embed_map_link = self._get_embed_map_link()
-            print(f"Phone number: {phone_number} \nAddress: {address} \nEmbed map link: {embed_map_link}")
+            opening_hours = self._get_opening_hours()
             
-
-        return self.driver.page_source if is_website_valid else None
+            result = {
+                "phone_number": phone_number,
+                "address": address,
+                "embed_map_link": embed_map_link,
+                "opening_hours": opening_hours
+            }
+            return result 
+        
+        else:
+            print("❌ Website validation failed.")
+            return None
     
     def _search_by_name(self, business_url:str, business_name:str, location:str) -> None:
         """
@@ -146,6 +155,37 @@ class GoogleMapsScraper(PersistentBrowser):
                 continue
         return "Not available"
     
+    def _get_opening_hours(self) -> str:
+        try:
+            el = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label*='day']")
+            raw = el.get_attribute("aria-label")
+
+            if raw:
+                cleaned_lines = []
+                for part in raw.split(";"):
+                    if any(day in part for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]):
+                        # Clean up display string
+                        line = re.sub(r"\(.*?\)", "", part)  # Remove (Holiday Notes)
+                        line = re.sub(r"Hours might differ", "", line, flags=re.IGNORECASE)
+                        line = line.replace("Hide opening hours for the week", "")
+                        line = re.sub(r"\s+", " ", line).strip()
+
+                        # 👉 Only now: split by comma THEN clean symbols!
+                        if "," in line:
+                            day, *hours = line.split(",", 1)
+                            day = day.strip().replace(",", "").replace(".", "")
+                            hours = hours[0].strip().replace(",", "").replace(".", "")
+                            cleaned_lines.append(f"{day}: {hours}")
+
+                return "\n".join(cleaned_lines)
+
+        except Exception as e:
+            print(f"❌ Failed to get weekly hours: {e}")
+
+        return "Not available"
+
+    
+    
     def _get_embed_map_link(self) -> str:
         try:
             wait = WebDriverWait(self.driver, self.timeout)
@@ -162,7 +202,7 @@ class GoogleMapsScraper(PersistentBrowser):
             )
 
             # Step 2: Wait & Click Embed a map tab
-            embed_tab = wait.until(
+            embed_tab = WebDriverWait(self.driver, 1).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Embed a map']"))
             )
             embed_tab.click()
