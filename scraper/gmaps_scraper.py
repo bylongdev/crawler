@@ -11,54 +11,110 @@ class GoogleMapsScraper(PersistentBrowser):
         super().__init__()  # 💖 Call parent class constructor
         self.driver = self.setup_driver("https://www.google.com/maps")
         
-    def search_business(self, business_url:str = "https://www.businesslocal.com.au", business_name:str = "Business Local Directory", location:str = "Melbourne") -> None:
+    def search_business(self, business_url: str = "https://www.businesslocal.com.au", business_name: str = "Business Local", location: str = "Melbourne") -> dict | None:
         """
-        Search for a business on Google Maps.
+        Search and extract business info from Google Maps, even if multiple results appear.
         """
+        print(f"🔍 Searching for: {business_name} in {location}")
+        self._search_by_name(business_name, location)
 
-        self._search_by_name(business_url, business_name, location)
+        print("🔗 Validating website...")
 
-        is_website_valid = self._validate_business_website(business_url)
-
-        if is_website_valid:
-            """ Start Gather Data:
-            - phone number
-            - address
-            - google maps embed link
-             """
-            phone_number = self._get_phone_number()
-            address = self._get_address()
-            embed_map_link = self._get_embed_map_link()
-            opening_hours = self._get_opening_hours()
+        # If already on business page
+        if "/maps/place/" in self.driver.current_url:
+            print("📍 Landed directly on business page!")
+            if self._validate_business_website(business_url):
+                return self._extract_all_info()
+            else:
+                print("❌ Website validation failed on direct page.")
+                return None
             
-            result = {
-                "phone_number": phone_number,
-                "address": address,
-                "embed_map_link": embed_map_link,
-                "opening_hours": opening_hours
-            }
-            return result 
+        WebDriverWait(self.driver, self.timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='Nv2PK']"))
+        )
+
         
-        else:
-            print("❌ Website validation failed.")
-            return None
+        # Else, check result list
+        results = self.driver.find_elements(By.CSS_SELECTOR, "div[class*='Nv2PK']")
+        print(f"🗂️ Found {len(results)} search results. Checking up to 4...")
+
+        for idx, result in enumerate(results[:10]):
+            print(f"\n🧪 Checking result {idx+1}...")
+
+            # 🚫 Skip if sponsored
+            if self._is_sponsored_result(result):
+                print("🚫 Skipping sponsored result.")
+                continue
+
+            try:
+                link = result.find_element(By.CSS_SELECTOR, "a.hfpxzc")
+                self.driver.execute_script("arguments[0].click();", link)
+
+                # 🏷️ Print out the business name
+                business_label = link.get_attribute("aria-label")
+                print(f"🔖 Business name: {business_label}")
+
+                # time.sleep(1)  # Wait for the page to load
+                super().wait_for_ready()
+                # WebDriverWait(self.driver, self.timeout).until( 
+                #     EC.presence_of_element_located((By.CSS_SELECTOR, "button[data-item-id='authority']"))
+                # )
+
+                if self._validate_business_website(business_url):
+                    href = link.get_attribute("href")
+                    self.driver.get(href)  # Go back to the original page
+
+                    WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-item-id='authority']"))
+                    )
+                    
+                    print("✅ Matched result!")
+                    print(self._extract_all_info())
+                    return None
+
+                print("⏪ Going back to results...")
+                # self.driver.back()
+                WebDriverWait(self.driver, self.timeout).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='Nv2PK']"))
+                )
+
+            except Exception as e:
+                print(f"⚠️ Error clicking result {idx+1}: {e}")
+                continue
+
+        print("❌ No matching result found.")
+        return None
+
+    def _extract_all_info(self) -> dict:
+        """Extracts all available business contact details."""
+        phone_number = self._get_phone_number()
+        address = self._get_address()
+        embed_map_link = self._get_embed_map_link()
+        opening_hours = self._get_opening_hours()
+
+        return {
+            "phone_number": phone_number,
+            "address": address,
+            "embed_map_link": embed_map_link,
+            "opening_hours": opening_hours
+        }
+
     
-    def _search_by_name(self, business_url:str, business_name:str, location:str) -> None:
+    def _search_by_name(self, business_name:str, location:str) -> None:
         """
         Search for a business by url, name and location on Google Maps.
         """
         search_box = self.driver.find_element(By.ID, "searchboxinput")
         search_box.clear()
-        search_box.send_keys(f"{business_name} {business_url} {location}")
+        search_box.send_keys(f"{business_name} {location}")
         search_box.send_keys(Keys.ENTER) 
         time.sleep(2)
 
         super().wait_for_ready()
 
-        WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-item-id='authority']"))
-        )
-        # return self.driver 
+        # WebDriverWait(self.driver, 10).until(
+        #     EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-item-id='authority']"))
+        # )
     
     def _get_website(self) -> str:
         """
@@ -97,6 +153,25 @@ class GoogleMapsScraper(PersistentBrowser):
             return True
         else:
             print(f"❌ Website mismatch: {actual_url} ≠ {expected_url}")
+            return False
+        
+    def _is_sponsored_result(self, element) -> bool:
+        """
+        Detect if a result is sponsored based on keywords and class hints.
+        """
+        try:
+            # Check for known sponsored words
+            text = element.text.lower()
+            if "sponsored" in text:
+                return True
+
+            # Check for class-based hints (can be obfuscated)
+            class_attr = element.get_attribute("class") or ""
+            if "ad" in class_attr.lower():
+                return True
+
+            return False
+        except:
             return False
 
     def _compare_websites(self, actual_url: str, expected_url: str) -> bool:
@@ -202,11 +277,15 @@ class GoogleMapsScraper(PersistentBrowser):
             )
 
             # Step 2: Wait & Click Embed a map tab
-            embed_tab = WebDriverWait(self.driver, 1).until(
+            embed_tab = WebDriverWait(self.driver, self.timeout).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Embed a map']"))
             )
+
+            time.sleep(1)  # Wait for the iframe to load
+
             embed_tab.click()
             print("🗺️ Clicked Embed a map tab!")
+
 
             # Step 3: Wait for the input to appear
             iframe_input = wait.until(
