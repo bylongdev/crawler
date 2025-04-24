@@ -1,14 +1,14 @@
 import json
 from urllib.parse import urlparse
 from .static_fetcher import fetch_static_html
-from .dynamic_fetcher import PersistentBrowser
+from .dynamic_fetcher import DynamicFetcher
 from extractor.contact_extractor import EmailsExtractor
 
 
 class HTMLFetcher:
     def __init__(self, cookie_path: str = "./scraper/cookies.json"):
         self.cookies = self.load_cookies_from_json(cookie_path)
-        self.browser = PersistentBrowser()  # Keep browser alive for this instance
+        self.browser = DynamicFetcher()  # Keep browser alive for this instance
         self.extractor = EmailsExtractor()
 
     def load_cookies_from_json(self, path: str) -> dict:

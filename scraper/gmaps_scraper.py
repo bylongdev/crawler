@@ -1,17 +1,19 @@
 import re
 import time
 from urllib.parse import urlparse
-from .dynamic_fetcher import PersistentBrowser
+
+from scraper.browser import Browser
+
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-class GoogleMapsScraper(PersistentBrowser):
+class GoogleMapsScraper(Browser):
     def __init__(self):
         super().__init__()  # 💖 Call parent class constructor
         self.driver = self.setup_driver("https://www.google.com/maps")
         
-    def search_business(self, business_url: str = "https://www.businesslocal.com.au", business_name: str = "Business Local", location: str = "Melbourne") -> dict | None:
+    def search_business(self, business_url: str = "https://www.businesslocal.com.au", business_name: str = "Business Local Directory", location: str = "Melbourne") -> dict | None:
         """
         Search and extract business info from Google Maps, even if multiple results appear.
         """
@@ -28,17 +30,16 @@ class GoogleMapsScraper(PersistentBrowser):
             else:
                 print("❌ Website validation failed on direct page.")
                 return None
-            
+
         WebDriverWait(self.driver, self.timeout).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='Nv2PK']"))
         )
-
         
         # Else, check result list
         results = self.driver.find_elements(By.CSS_SELECTOR, "div[class*='Nv2PK']")
         print(f"🗂️ Found {len(results)} search results. Checking up to 4...")
 
-        for idx, result in enumerate(results[:10]):
+        for idx, result in enumerate(results):
             print(f"\n🧪 Checking result {idx+1}...")
 
             # 🚫 Skip if sponsored
@@ -54,29 +55,14 @@ class GoogleMapsScraper(PersistentBrowser):
                 business_label = link.get_attribute("aria-label")
                 print(f"🔖 Business name: {business_label}")
 
-                # time.sleep(1)  # Wait for the page to load
                 super().wait_for_ready()
-                # WebDriverWait(self.driver, self.timeout).until( 
-                #     EC.presence_of_element_located((By.CSS_SELECTOR, "button[data-item-id='authority']"))
-                # )
 
                 if self._validate_business_website(business_url):
                     href = link.get_attribute("href")
                     self.driver.get(href)  # Go back to the original page
-
-                    WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-item-id='authority']"))
-                    )
                     
                     print("✅ Matched result!")
-                    print(self._extract_all_info())
-                    return None
-
-                print("⏪ Going back to results...")
-                # self.driver.back()
-                WebDriverWait(self.driver, self.timeout).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='Nv2PK']"))
-                )
+                    return self._extract_all_info()
 
             except Exception as e:
                 print(f"⚠️ Error clicking result {idx+1}: {e}")
@@ -108,13 +94,16 @@ class GoogleMapsScraper(PersistentBrowser):
         search_box.clear()
         search_box.send_keys(f"{business_name} {location}")
         search_box.send_keys(Keys.ENTER) 
-        time.sleep(2)
 
         super().wait_for_ready()
 
-        # WebDriverWait(self.driver, 10).until(
-        #     EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-item-id='authority']"))
-        # )
+        WebDriverWait(self.driver, 10).until(
+            EC.any_of(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a[data-item-id='authority']")),
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='Nv2PK']"))
+            )
+        )
+
     
     def _get_website(self) -> str:
         """
@@ -231,33 +220,40 @@ class GoogleMapsScraper(PersistentBrowser):
         return "Not available"
     
     def _get_opening_hours(self) -> str:
+        """
+        Extracts and returns weekly opening hours starting from Monday.
+        """
         try:
             el = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label*='day']")
             raw = el.get_attribute("aria-label")
 
-            if raw:
-                cleaned_lines = []
-                for part in raw.split(";"):
-                    if any(day in part for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]):
-                        # Clean up display string
-                        line = re.sub(r"\(.*?\)", "", part)  # Remove (Holiday Notes)
+            if not raw:
+                return "Not available"
+
+            # Dictionary to hold extracted hours
+            hours_dict = {}
+
+            for part in raw.split(";"):
+                for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
+                    if part.strip().startswith(day):
+                        # Clean and normalize the text
+                        line = re.sub(r"\(.*?\)", "", part)
                         line = re.sub(r"Hours might differ", "", line, flags=re.IGNORECASE)
                         line = line.replace("Hide opening hours for the week", "")
                         line = re.sub(r"\s+", " ", line).strip()
 
-                        # 👉 Only now: split by comma THEN clean symbols!
                         if "," in line:
-                            day, *hours = line.split(",", 1)
-                            day = day.strip().replace(",", "").replace(".", "")
-                            hours = hours[0].strip().replace(",", "").replace(".", "")
-                            cleaned_lines.append(f"{day}: {hours}")
+                            _, hours = line.split(",", 1)
+                            hours_dict[day] = hours.strip()
+                        break  # Stop checking other days for this part
 
-                return "\n".join(cleaned_lines)
+            # Sort output by weekday order
+            weekday_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            return "\n".join(f"{day}: {hours_dict.get(day, 'Not available')}" for day in weekday_order)
 
         except Exception as e:
             print(f"❌ Failed to get weekly hours: {e}")
-
-        return "Not available"
+            return "Not available"
 
     
     
